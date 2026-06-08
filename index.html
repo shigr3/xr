@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Empire Metaverse</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffcc;
+            text-shadow: 0 0 10px #00ffcc;
+            pointer-events: none;
+        }
+        h1 { margin: 0 0 5px 0; font-size: 24px; letter-spacing: 2px; }
+        p { margin: 0; font-size: 14px; color: #888; }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            transform: translate(-50%, -50%);
+            color: #00ffcc;
+            pointer-events: none;
+            font-weight: bold;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>DIGITAL EMPIRE v1.0</h1>
+        <p>画面をクリックして操作開始 / 戻るには ESC<br>移動: W, A, S, D | 視点: マウス</p>
+    </div>
+    <div id="crosshair">+</div>
+
+    <script>
+        // --- 1. シーン・カメラ・レンダラーの設定 ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050510);
+        scene.fog = new THREE.FogExp2(0x050510, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 20); // 初期位置（少し高め）
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- 2. 環境光・光源の設定 ---
+        const ambientLight = new THREE.AmbientLight(0x111133);
+        scene.add(ambientLight);
+
+        // 帝国の中心を照らすメインライト
+        const dirLight = new THREE.DirectionalLight(0x00ffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
+
+        // サイバー感を演出するポイントライト
+        const centerLight = new THREE.PointLight(0xff00ff, 2, 50);
+        centerLight.position.set(0, 10, 0);
+        scene.add(centerLight);
+
+        // --- 3. 地形（グリッド床）の創造 ---
+        // サイバー空間定番の光るグリッド
+        const gridHelper = new THREE.GridHelper(500, 100, 0x00ffcc, 0x222244);
+        gridHelper.position.y = 0;
+        scene.add(gridHelper);
+
+        // 地面の衝突判定用ダミー
+        const floorGeo = new THREE.PlaneGeometry(500, 500);
+        const floorMat = new THREE.MeshBasicMaterial({ visible: false });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // --- 4. 建築物の自動生成（コードのみで構築） ---
+        const buildings = [];
+        
+        // 中央のシンボルタワー（メインコア）
+        const coreGeo = new THREE.CylinderGeometry(2, 4, 30, 8);
+        const coreMat = new THREE.MeshPhongMaterial({
+            color: 0x000000,
+            emissive: 0x00ffcc,
+            wireframe: true
+        });
+        const coreTower = new THREE.Mesh(coreGeo, coreMat);
+        coreTower.position.set(0, 15, 0);
+        scene.add(coreTower);
+
+        // 周辺のデジタルビルディング群の生成
+        const buildingCount = 60;
+        for (let i = 0; i < buildingCount; i++) {
+            // ランダムなサイズ
+            const bWidth = Math.random() * 6 + 4;
+            const bHeight = Math.random() * 30 + 10;
+            const bDepth = Math.random() * 6 + 4;
+
+            const bGeo = new THREE.BoxGeometry(bWidth, bHeight, bDepth);
+            
+            // サイバーネオンなマテリアル（ランダムで青か紫）
+            const neonColor = Math.random() > 0.5 ? 0x00ffff : 0xff00ff;
+            const bMat = new THREE.MeshPhongMaterial({
+                color: 0x050515,
+                emissive: neonColor,
+                emissiveIntensity: 0.2,
+                specular: 0xffffff,
+                shininess: 30,
+                flatShading: true
+            });
+
+            const building = new THREE.Mesh(bGeo, bMat);
+
+            // 配置位置の計算（中央のタワーを避ける）
+            let x, z;
+            do {
+                x = (Math.random() - 0.5) * 150;
+                z = (Math.random() - 0.5) * 150;
+            } while (Math.sqrt(x*x + z*z) < 20); // 中央20マス以内には建てない
+
+            building.position.set(x, bHeight / 2, z);
+            scene.add(building);
+            buildings.push(building);
+
+            // ビルの外枠を光らせるワイヤーフレームを追加して電脳感を強化
+            const wireGeo = new THREE.EdgesGeometry(bGeo);
+            const wireMat = new THREE.LineBasicMaterial({ color: neonColor, linewidth: 1.5 });
+            const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+            wireframe.position.copy(building.position);
+            scene.add(wireframe);
+        }
+
+        // --- 5. 操作システム (PointerLockControls) ---
+        const controls = new THREE.PointerLockControls(camera, document.body);
+
+        // クリックしたら画面をロックして操作開始
+        document.body.addEventListener('click', () => {
+            controls.lock();
+        });
+
+        scene.add(controls.getObject());
+
+        // キーボード入力の状態管理
+        const moveState = { forward: false, backward: false, left: false, right: false };
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+
+        const onKeyDown = (event) => {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = true; break;
+                case 'KeyA': moveState.left = true; break;
+                case 'KeyS': moveState.backward = true; break;
+                case 'KeyD': moveState.right = true; break;
+            }
+        };
+
+        const onKeyUp = (event) => {
+            switch (event.code) {
+                case 'KeyW': moveState.forward = false; break;
+                case 'KeyA': moveState.left = false; break;
+                case 'KeyS': moveState.backward = false; break;
+                case 'KeyD': moveState.right = false; break;
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- 6. アニメーション＆レンダリングループ ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            // 中央タワーをゆっくり回転させて生きているシステム感を演出
+            coreTower.rotation.y += 0.005;
+
+            // 移動処理
+            if (controls.isLocked) {
+                // 減速（摩擦のシミュレーション）
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                // 入力方向の決定
+                direction.z = Number(moveState.forward) - Number(moveState.backward);
+                direction.x = Number(moveState.right) - Number(moveState.left);
+                direction.normalize();
+
+                // 移動速度の適用
+                const speed = 150.0;
+                if (moveState.forward || moveState.backward) velocity.z -= direction.z * speed * delta;
+                if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
+
+                // カメラのローカル座標系を基準に移動
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                // 地面に足をつけさせる（高さ固定）
+                controls.getObject().position.y = 3;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- 7. ウィンドウサイズ変更への追従 ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
