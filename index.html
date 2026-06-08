@@ -2,229 +2,338 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Digital Empire Metaverse</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #000;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #b0e0e6;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            touch-action: none; /* ブラウザ特有のスクロール等を禁止 */
+            -webkit-user-select: none; /* テキスト選択を禁止 */
+            user-select: none;
         }
         #ui {
             position: absolute;
             top: 20px;
             left: 20px;
-            color: #00ffcc;
-            text-shadow: 0 0 10px #00ffcc;
+            color: #333333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            pointer-events: none;
+            z-index: 10;
+        }
+        h1 { margin: 0 0 5px 0; font-size: 20px; letter-spacing: 1px; color: #1a1a1a; }
+        p { margin: 0; font-size: 13px; color: #555; line-height: 1.4; }
+        
+        /* 画面左右のタッチエリア可視化（デバッグ・認識用） */
+        #touch-zones {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .zone {
+            flex: 1;
+            height: 100%;
+            position: relative;
+        }
+        
+        /* 仮想ジョイスティックの見た目 */
+        #joystick-base {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: rgba(0, 0, 0, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            display: none;
+            transform: translate(-50%, -50%);
             pointer-events: none;
         }
-        h1 { margin: 0 0 5px 0; font-size: 24px; letter-spacing: 2px; }
-        p { margin: 0; font-size: 14px; color: #888; }
-        #crosshair {
+        #joystick-stick {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 10px;
-            height: 10px;
-            transform: translate(-50%, -50%);
-            color: #00ffcc;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            top: 20px;
+            left: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             pointer-events: none;
-            font-weight: bold;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
 
     <div id="ui">
-        <h1>DIGITAL EMPIRE v1.0</h1>
-        <p>画面をクリックして操作開始 / 戻るには ESC<br>移動: W, A, S, D | 視点: マウス</p>
+        <h1>DIGITAL EMPIRE</h1>
+        <p>【iPad・スマホ】<br>左画面スワイプ：移動 / 右画面スワイプ：視点変更<br>【PC】<br>W,A,S,D または 矢印キー：移動 / 画面ドラッグ：視点変更</p>
     </div>
-    <div id="crosshair">+</div>
+
+    <div id="touch-zones">
+        <div class="zone" id="left-zone">
+            <div id="joystick-base"><div id="joystick-stick"></div></div>
+        </div>
+        <div class="zone" id="right-zone"></div>
+    </div>
 
     <script>
-        // --- 1. シーン・カメラ・レンダラーの設定 ---
+        // --- 1. シーン・カメラ・レンダラーの設定（爽やかな青空） ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050510);
-        scene.fog = new THREE.FogExp2(0x050510, 0.015);
+        scene.background = new THREE.Color(0xcae5f5); // 爽やかなライトブルーの空
+        scene.fog = new THREE.FogExp2(0xcae5f5, 0.01);
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 20); // 初期位置（少し高め）
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 35); // 初期の視点の高さ
+
+        // カメラの回転を管理するオイラー角（タッチ・マウス兼用）
+        let cameraRotation = { x: 0, y: 0 };
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.shadowMap.enabled = true;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 重さ対策
         document.body.appendChild(renderer.domElement);
 
-        // --- 2. 環境光・光源の設定 ---
-        const ambientLight = new THREE.AmbientLight(0x111133);
+        // --- 2. 自然な光源の設定 ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // 全体を明るく
         scene.add(ambientLight);
 
-        // 帝国の中心を照らすメインライト
-        const dirLight = new THREE.DirectionalLight(0x00ffff, 0.8);
-        dirLight.position.set(20, 40, 20);
-        scene.add(dirLight);
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 0.7); // 暖かい太陽光
+        sunLight.position.set(40, 60, 20);
+        scene.add(sunLight);
 
-        // サイバー感を演出するポイントライト
-        const centerLight = new THREE.PointLight(0xff00ff, 2, 50);
-        centerLight.position.set(0, 10, 0);
-        scene.add(centerLight);
-
-        // --- 3. 地形（グリッド床）の創造 ---
-        // サイバー空間定番の光るグリッド
-        const gridHelper = new THREE.GridHelper(500, 100, 0x00ffcc, 0x222244);
-        gridHelper.position.y = 0;
-        scene.add(gridHelper);
-
-        // 地面の衝突判定用ダミー
-        const floorGeo = new THREE.PlaneGeometry(500, 500);
-        const floorMat = new THREE.MeshBasicMaterial({ visible: false });
+        // --- 3. 地形（プレーンなアスファルト・白線タイル調） ---
+        const floorGeo = new THREE.PlaneGeometry(1000, 1000);
+        const floorMat = new THREE.MeshPhongMaterial({ 
+            color: 0xe0e8f0, // 明るいグレー
+            side: THREE.DoubleSide
+        });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-        // --- 4. 建築物の自動生成（コードのみで構築） ---
-        const buildings = [];
-        
-        // 中央のシンボルタワー（メインコア）
-        const coreGeo = new THREE.CylinderGeometry(2, 4, 30, 8);
-        const coreMat = new THREE.MeshPhongMaterial({
-            color: 0x000000,
-            emissive: 0x00ffcc,
-            wireframe: true
-        });
-        const coreTower = new THREE.Mesh(coreGeo, coreMat);
-        coreTower.position.set(0, 15, 0);
-        scene.add(coreTower);
+        // 街並みのアクセントにシンプルなグリッド
+        const gridHelper = new THREE.GridHelper(400, 40, 0xb0c4de, 0xccd7e4);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
 
-        // 周辺のデジタルビルディング群の生成
-        const buildingCount = 60;
+        // --- 4. 建築物の自動生成（普通の街並みの色彩） ---
+        const centerTowerGeo = new THREE.CylinderGeometry(3, 4, 40, 16);
+        const centerTowerMat = new THREE.MeshPhongMaterial({ color: 0x4a7c59 }); // 落ち着いたアースカラーのタワー
+        const centerTower = new THREE.Mesh(centerTowerGeo, centerTowerMat);
+        centerTower.position.set(0, 20, 0);
+        scene.add(centerTower);
+
+        const buildingCount = 50;
+        // 白、ベージュ、ライトグレー、モダングレーなどの日常的なビルの色合い
+        const colors = [0xffffff, 0xf5f5dc, 0xe6e6fa, 0xdcdcdc, 0xd3d3d3, 0xb0c4de, 0x95a5a6];
+
         for (let i = 0; i < buildingCount; i++) {
-            // ランダムなサイズ
-            const bWidth = Math.random() * 6 + 4;
-            const bHeight = Math.random() * 30 + 10;
-            const bDepth = Math.random() * 6 + 4;
+            const bWidth = Math.random() * 8 + 4;
+            const bHeight = Math.random() * 25 + 8;
+            const bDepth = Math.random() * 8 + 4;
 
             const bGeo = new THREE.BoxGeometry(bWidth, bHeight, bDepth);
-            
-            // サイバーネオンなマテリアル（ランダムで青か紫）
-            const neonColor = Math.random() > 0.5 ? 0x00ffff : 0xff00ff;
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
             const bMat = new THREE.MeshPhongMaterial({
-                color: 0x050515,
-                emissive: neonColor,
-                emissiveIntensity: 0.2,
-                specular: 0xffffff,
-                shininess: 30,
+                color: randomColor,
                 flatShading: true
             });
 
             const building = new THREE.Mesh(bGeo, bMat);
 
-            // 配置位置の計算（中央のタワーを避ける）
             let x, z;
             do {
-                x = (Math.random() - 0.5) * 150;
-                z = (Math.random() - 0.5) * 150;
-            } while (Math.sqrt(x*x + z*z) < 20); // 中央20マス以内には建てない
+                x = (Math.random() - 0.5) * 160;
+                z = (Math.random() - 0.5) * 160;
+            } while (Math.sqrt(x*x + z*z) < 25); // 中央から離す
 
             building.position.set(x, bHeight / 2, z);
             scene.add(building);
-            buildings.push(building);
-
-            // ビルの外枠を光らせるワイヤーフレームを追加して電脳感を強化
-            const wireGeo = new THREE.EdgesGeometry(bGeo);
-            const wireMat = new THREE.LineBasicMaterial({ color: neonColor, linewidth: 1.5 });
-            const wireframe = new THREE.LineSegments(wireGeo, wireMat);
-            wireframe.position.copy(building.position);
-            scene.add(wireframe);
         }
 
-        // --- 5. 操作システム (PointerLockControls) ---
-        const controls = new THREE.PointerLockControls(camera, document.body);
+        // --- 5. 入力・操作システム (PC・iPadハイブリッド) ---
+        const moveInput = { forward: 0, backward: 0, left: 0, right: 0 };
+        const moveVector = new THREE.Vector3();
 
-        // クリックしたら画面をロックして操作開始
-        document.body.addEventListener('click', () => {
-            controls.lock();
-        });
-
-        scene.add(controls.getObject());
-
-        // キーボード入力の状態管理
-        const moveState = { forward: false, backward: false, left: false, right: false };
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
-
-        const onKeyDown = (event) => {
-            switch (event.code) {
-                case 'KeyW': moveState.forward = true; break;
-                case 'KeyA': moveState.left = true; break;
-                case 'KeyS': moveState.backward = true; break;
-                case 'KeyD': moveState.right = true; break;
+        // 5a. PC用キーボードイベント (WASD + 矢印キー対応)
+        const onKeyDown = (e) => {
+            switch (e.code) {
+                case 'KeyW': case 'ArrowUp': moveInput.forward = 1; break;
+                case 'KeyA': case 'ArrowLeft': moveInput.left = 1; break;
+                case 'KeyS': case 'ArrowDown': moveInput.backward = 1; break;
+                case 'KeyD': case 'ArrowRight': moveInput.right = 1; break;
             }
         };
-
-        const onKeyUp = (event) => {
-            switch (event.code) {
-                case 'KeyW': moveState.forward = false; break;
-                case 'KeyA': moveState.left = false; break;
-                case 'KeyS': moveState.backward = false; break;
-                case 'KeyD': moveState.right = false; break;
+        const onKeyUp = (e) => {
+            switch (e.code) {
+                case 'KeyW': case 'ArrowUp': moveInput.forward = 0; break;
+                case 'KeyA': case 'ArrowLeft': moveInput.left = 0; break;
+                case 'KeyS': case 'ArrowDown': moveInput.backward = 0; break;
+                case 'KeyD': case 'ArrowRight': moveInput.right = 0; break;
             }
         };
-
         document.addEventListener('keydown', onKeyDown);
         document.addEventListener('keyup', onKeyUp);
 
-        // --- 6. アニメーション＆レンダリングループ ---
+        // 5b. タッチ（iPad）＆マウス兼用コントロールロジック
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickStick = document.getElementById('joystick-stick');
+        
+        let touchLeftId = null;
+        let touchRightId = null;
+        let leftStartPos = { x: 0, y: 0 };
+        let rightLastPos = { x: 0, y: 0 };
+
+        // マウスドラッグでの視点変更用（PC用）
+        let isMouseDown = false;
+        let mouseLastPos = { x: 0, y: 0 };
+
+        // 全体のタッチ開始処理
+        window.addEventListener('touchstart', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                // 画面の左半分 => 移動ジョイスティック
+                if (touch.clientX < window.innerWidth / 2 && touchLeftId === null) {
+                    touchLeftId = touch.identifier;
+                    leftStartPos = { x: touch.clientX, y: touch.clientY };
+                    
+                    joystickBase.style.display = 'block';
+                    joystickBase.style.left = leftStartPos.x + 'px';
+                    joystickBase.style.top = leftStartPos.y + 'px';
+                    joystickStick.style.transform = 'translate(0px, 0px)';
+                } 
+                // 画面の右半分 => 視点変更
+                else if (touch.clientX >= window.innerWidth / 2 && touchRightId === null) {
+                    touchRightId = touch.identifier;
+                    rightLastPos = { x: touch.clientX, y: touch.clientY };
+                }
+            }
+        }, { passive: false });
+
+        // タッチ移動中処理
+        window.addEventListener('touchmove', (e) => {
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                
+                // 左半分のジョイスティック処理
+                if (touch.identifier === touchLeftId) {
+                    const distX = touch.clientX - leftStartPos.x;
+                    const distY = touch.clientY - leftStartPos.y;
+                    const distance = Math.sqrt(distX*distX + distY*distY);
+                    const maxDist = 40; // スティックの可動半径
+                    
+                    let moveX = distX;
+                    let moveY = distY;
+                    
+                    if (distance > maxDist) {
+                        moveX = (distX / distance) * maxDist;
+                        moveY = (distY / distance) * maxDist;
+                    }
+                    
+                    joystickStick.style.transform = `translate(${moveX}px, ${moveY}px)`;
+                    
+                    // 移動入力値に変換 (-1.0 〜 1.0)
+                    moveInput.right = moveX > 0 ? moveX / maxDist : 0;
+                    moveInput.left = moveX < 0 ? -moveX / maxDist : 0;
+                    moveInput.backward = moveY > 0 ? moveY / maxDist : 0;
+                    moveInput.forward = moveY < 0 ? -moveY / maxDist : 0;
+                }
+                
+                // 右半分の視点移動処理
+                if (touch.identifier === touchRightId) {
+                    const movementX = touch.clientX - rightLastPos.x;
+                    const movementY = touch.clientY - rightLastPos.y;
+                    
+                    cameraRotation.y -= movementX * 0.005;
+                    cameraRotation.x -= movementY * 0.005;
+                    cameraRotation.x = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraRotation.x));
+                    
+                    rightLastPos = { x: touch.clientX, y: touch.clientY };
+                }
+            }
+        }, { passive: false });
+
+        // タッチ終了処理
+        const onTouchEnd = (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.identifier === touchLeftId) {
+                    touchLeftId = null;
+                    joystickBase.style.display = 'none';
+                    moveInput.forward = 0; moveInput.backward = 0; moveInput.left = 0; moveInput.right = 0;
+                }
+                if (touch.identifier === touchRightId) {
+                    touchRightId = null;
+                }
+            }
+        };
+        window.addEventListener('touchend', onTouchEnd);
+        window.addEventListener('touchcancel', onTouchEnd);
+
+        // PC用マウスドラッグ視点変更
+        window.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            mouseLastPos = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            const movementX = e.clientX - mouseLastPos.x;
+            const movementY = e.clientY - mouseLastPos.y;
+            
+            cameraRotation.y -= movementX * 0.003;
+            cameraRotation.x -= movementY * 0.003;
+            cameraRotation.x = Math.max(-Math.PI/3, Math.min(Math.PI/3, cameraRotation.x));
+            
+            mouseLastPos = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mouseup', () => isMouseDown = false);
+
+
+        // --- 6. アニメーション＆フレーム更新ループ ---
         const clock = new THREE.Clock();
+        const speed = 12.0; // 移動速度
 
         function animate() {
             requestAnimationFrame(animate);
-
             const delta = clock.getDelta();
 
-            // 中央タワーをゆっくり回転させて生きているシステム感を演出
-            coreTower.rotation.y += 0.005;
+            // オイラー角からカメラの回転を適用
+            camera.quaternion.setFromEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
 
-            // 移動処理
-            if (controls.isLocked) {
-                // 減速（摩擦のシミュレーション）
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
+            // 移動ベクトルの計算
+            const zMove = moveInput.backward - moveInput.forward;
+            const xMove = moveInput.right - moveInput.left;
 
-                // 入力方向の決定
-                direction.z = Number(moveState.forward) - Number(moveState.backward);
-                direction.x = Number(moveState.right) - Number(moveState.left);
-                direction.normalize();
+            moveVector.set(xMove, 0, zMove);
+            moveVector.normalize();
 
-                // 移動速度の適用
-                const speed = 150.0;
-                if (moveState.forward || moveState.backward) velocity.z -= direction.z * speed * delta;
-                if (moveState.left || moveState.right) velocity.x -= direction.x * speed * delta;
+            // カメラの向いている方角（水平面のみ）に合わせて移動
+            const targetRotationY = cameraRotation.y;
+            moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), targetRotationY);
 
-                // カメラのローカル座標系を基準に移動
-                controls.moveRight(-velocity.x * delta);
-                controls.moveForward(-velocity.z * delta);
-
-                // 地面に足をつけさせる（高さ固定）
-                controls.getObject().position.y = 3;
-            }
+            // 位置の更新
+            camera.position.x += moveVector.x * speed * delta;
+            camera.position.z += moveVector.z * speed * delta;
+            camera.position.y = 3; // 高さを一定にキープ
 
             renderer.render(scene, camera);
         }
 
         animate();
 
-        // --- 7. ウィンドウサイズ変更への追従 ---
+        // --- 7. ウィンドウリサイズ対応 ---
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
     </script>
 </body>
 </html>
