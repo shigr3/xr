@@ -245,27 +245,24 @@ const fenceGroup = new THREE.Group();
 const fWidth = runwayWidth + 20;
 const fLength = runwayLength + 20;
 
-const fenceBack = new THREE.Mesh(new THREE.BoxGeometry(fWidth, 3, 0.5), fenceMat);
-fenceBack.position.set(0, 1.5, -fLength/2);
 const fenceLeft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3, fLength), fenceMat);
 fenceLeft.position.set(-fWidth/2, 1.5, 0);
 const fenceRight = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3, fLength), fenceMat);
 fenceRight.position.set(fWidth/2, 1.5, 0);
-fenceGroup.add(fenceBack, fenceLeft, fenceRight);
+fenceGroup.add(fenceLeft, fenceRight);
 
 airport.add(fenceGroup);
 airport.position.set(0, 0.06, -450);
 scene.add(airport);
 
 // 空港フェンスの当たり判定（世界座標換算）
-colliders.push({ type: 'box', x: 0, z: -450 - fLength/2, hw: fWidth/2, hd: 1 });
 colliders.push({ type: 'box', x: -fWidth/2, z: -450, hw: 1, hd: fLength/2 });
 colliders.push({ type: 'box', x: fWidth/2, z: -450, hw: 1, hd: fLength/2 });
 
 
 // 4e. 高級邸宅 (My House) - スカスカを解消しリアルに強化
 const mansion = new THREE.Group();
-const wallMat = new THREE.MeshPhongMaterial({ color: 0xf7fafc }); // 高級感あるオフホワイトの壁
+const wallMat = new THREE.MeshPhongMaterial({ color: 0xfbd38d });
 const glassMat = new THREE.MeshPhongMaterial({ color: 0xadd8e6, transparent: true, opacity: 0.5 });
 const frameMat = new THREE.MeshPhongMaterial({ color: 0x2d3748 });
 
@@ -290,9 +287,9 @@ const wallFrontRight = new THREE.Mesh(new THREE.BoxGeometry(12, 10, 0.8), wallMa
 wallFrontRight.position.set(10, 5, 16); // 右に少し寄せて、X=-6からX=4の間（幅10）を空ける
 
 // 巨大なガラス窓（玄関スリットを避けて配置）
-const luxuryWindow = new THREE.Mesh(new THREE.BoxGeometry(8, 7, 0.2), glassMat);
-luxuryWindow.position.set(6, 4.5, 16); 
-mansion.add(wallLeft, wallRight, wallBack, wallFrontLeft, wallFrontRight, luxuryWindow);
+//const luxuryWindow = new THREE.Mesh(new THREE.BoxGeometry(8, 7, 0.2), glassMat);
+//luxuryWindow.position.set(6, 4.5, 16); 
+//mansion.add(wallLeft, wallRight, wallBack, wallFrontLeft, wallFrontRight, luxuryWindow);
 
 // 邸宅内の当たり判定（外壁・正面壁を個別に登録して中に入れるようにする）
 colliders.push({ type: 'box', x: 120 - 16, z: -400, hw: 0.5, hd: 16 }); // 左壁
