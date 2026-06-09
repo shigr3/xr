@@ -228,8 +228,8 @@ const whiteLightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
 for (let z = -200; z <= 200; z += 20) {
     let lMat = whiteLightMat;
-    if (z === -200) lMat = greenLightMat; // 手前は緑
-    if (z === 200) lMat = redLightMat;    // 奥は赤
+    if (z === -200) lMat = greenLightMat; 
+    if (z === 200) lMat = redLightMat;    
     
     const leftLight = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), lMat);
     leftLight.position.set(-runwayWidth/2 - 1, 0.2, z);
@@ -241,7 +241,6 @@ for (let z = -200; z <= 200; z += 20) {
 // 空港の端の柵（フェンス）
 const fenceMat = new THREE.MeshPhongMaterial({ color: 0x718096 });
 const fenceGroup = new THREE.Group();
-// 滑走路の周囲を囲う簡易フェンスと当たり判定
 const fWidth = runwayWidth + 20;
 const fLength = runwayLength + 20;
 
@@ -284,19 +283,14 @@ wallBack.position.set(0, 5, -16);
 const wallFrontLeft = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 0.8), wallMat);
 wallFrontLeft.position.set(-11, 5, 16);
 const wallFrontRight = new THREE.Mesh(new THREE.BoxGeometry(12, 10, 0.8), wallMat);
-wallFrontRight.position.set(10, 5, 16); // 右に少し寄せて、X=-6からX=4の間（幅10）を空ける
-
-// 巨大なガラス窓（玄関スリットを避けて配置）
-//const luxuryWindow = new THREE.Mesh(new THREE.BoxGeometry(8, 7, 0.2), glassMat);
-//luxuryWindow.position.set(6, 4.5, 16); 
-//mansion.add(wallLeft, wallRight, wallBack, wallFrontLeft, wallFrontRight, luxuryWindow);
+wallFrontRight.position.set(10, 5, 16); 
 
 // 邸宅内の当たり判定（外壁・正面壁を個別に登録して中に入れるようにする）
-colliders.push({ type: 'box', x: 120 - 16, z: -400, hw: 0.5, hd: 16 }); // 左壁
-colliders.push({ type: 'box', x: 120 + 16, z: -400, hw: 0.5, hd: 16 }); // 右壁
-colliders.push({ type: 'box', x: 120, z: -400 - 16, hw: 16, hd: 0.5 }); // 奥壁
-colliders.push({ type: 'box', x: 120 - 11, z: -400 + 16, hw: 5, hd: 0.5 });  // 前壁左
-colliders.push({ type: 'box', x: 120 + 10, z: -400 + 16, hw: 6, hd: 0.5 });  // 前壁右（窓含む）
+colliders.push({ type: 'box', x: 120 - 16, z: -400, hw: 0.5, hd: 16 }); 
+colliders.push({ type: 'box', x: 120 + 16, z: -400, hw: 0.5, hd: 16 }); 
+colliders.push({ type: 'box', x: 120, z: -400 - 16, hw: 16, hd: 0.5 }); 
+colliders.push({ type: 'box', x: 120 - 11, z: -400 + 16, hw: 5, hd: 0.5 });  
+colliders.push({ type: 'box', x: 120 + 10, z: -400 + 16, hw: 6, hd: 0.5 });  
 
 // 内部インテリア
 const carpet = new THREE.Mesh(new THREE.PlaneGeometry(22, 22), new THREE.MeshBasicMaterial({ color: 0x9b1c1c }));
@@ -326,17 +320,101 @@ mansion.position.set(120, 0, -400);
 scene.add(mansion);
 
 
+// --- 4f. モブ建物の追加配置（密度強化） ---
+const mobColors = [0x95a5a6, 0x7f8c8d, 0x34495e, 0xd2d7d9];
+for (let i = -5; i <= 5; i++) {
+    if (Math.abs(i) < 2) continue;
+    const sideX1 = new THREE.Mesh(new THREE.BoxGeometry(10, 12, 10), new THREE.MeshPhongMaterial({ color: mobColors[Math.floor(pseudoRandom() * mobColors.length)] }));
+    sideX1.position.set(i * 18, 6, 42);
+    scene.add(sideX1);
+    addBoxCollider(sideX1, 11, 11);
+
+    const sideX2 = new THREE.Mesh(new THREE.BoxGeometry(10, 12, 10), new THREE.MeshPhongMaterial({ color: mobColors[Math.floor(pseudoRandom() * mobColors.length)] }));
+    sideX2.position.set(i * 18, 6, -42);
+    scene.add(sideX2);
+    addBoxCollider(sideX2, 11, 11);
+
+    const sideZ1 = new THREE.Mesh(new THREE.BoxGeometry(10, 12, 10), new THREE.MeshPhongMaterial({ color: mobColors[Math.floor(pseudoRandom() * mobColors.length)] }));
+    sideZ1.position.set(42, 6, i * 18);
+    scene.add(sideZ1);
+    addBoxCollider(sideZ1, 11, 11);
+
+    const sideZ2 = new THREE.Mesh(new THREE.BoxGeometry(10, 12, 10), new THREE.MeshPhongMaterial({ color: mobColors[Math.floor(pseudoRandom() * mobColors.length)] }));
+    sideZ2.position.set(-42, 6, i * 18);
+    scene.add(sideZ2);
+    addBoxCollider(sideZ2, 11, 11);
+}
+
+
+// --- 4g. 線路と電車の創造（街の全区画をダイナミックに囲う大環状線） ---
+const trackPoints = [];
+const halfSize = 180; 
+
+for (let z = halfSize; z >= -halfSize; z -= 4) trackPoints.push(new THREE.Vector3(-halfSize, 0.4, z));
+for (let x = -halfSize; x <= halfSize; x += 4) trackPoints.push(new THREE.Vector3(x, 0.4, -halfSize));
+for (let z = -halfSize; z <= halfSize; z += 4) trackPoints.push(new THREE.Vector3(halfSize, 0.4, z));
+for (let x = halfSize; x >= -halfSize; x -= 4) trackPoints.push(new THREE.Vector3(x, 0.4, halfSize));
+
+const trackGroup = new THREE.Group();
+const tieMat = new THREE.MeshPhongMaterial({ color: 0x5c4033 });
+const railMat = new THREE.MeshPhongMaterial({ color: 0xd1d5db, specular: 0xffffff });
+trackPoints.forEach((pt, idx) => {
+    if (idx % 2 === 0) {
+        const tie = new THREE.Mesh(new THREE.BoxGeometry(5, 0.1, 0.8), tieMat);
+        tie.position.copy(pt);
+        if (Math.abs(pt.x) === halfSize && Math.abs(pt.z) !== halfSize) tie.rotation.y = Math.PI / 2;
+        trackGroup.add(tie);
+    }
+});
+scene.add(trackGroup);
+
+const trainGroup = new THREE.Group();
+const carMat = new THREE.MeshPhongMaterial({ color: 0x009b4f, specular: 0xffffff }); 
+const glassUnitMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+
+function createCar() {
+    const car = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 12), carMat);
+    body.position.y = 1.4;
+    const frontGlass = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 0.2), glassUnitMat);
+    frontGlass.position.set(0, 1.7, 6.01);
+    car.add(body, frontGlass);
+    return car;
+}
+
+const leadCar = createCar();
+const secondCar = createCar();
+trainGroup.add(leadCar, secondCar);
+scene.add(trainGroup);
+
+let trainProgress = 0.0;
+let trainSpeed = 0.0;
+let isDriving = false; 
+
+
 // --- 5. 入力・操作システム ---
 const moveInput = { forward: 0, backward: 0, left: 0, right: 0 };
 const moveVector = new THREE.Vector3();
 
-// キーボード
 const onKeyDown = (e) => {
     switch (e.code) {
         case 'KeyW': case 'ArrowUp': moveInput.forward = 1; break;
         case 'KeyA': case 'ArrowLeft': moveInput.left = 1; break;
         case 'KeyS': case 'ArrowDown': moveInput.backward = 1; break;
         case 'KeyD': case 'ArrowRight': moveInput.right = 1; break;
+        case 'Enter':
+            if (isDriving) {
+                isDriving = false;
+                camera.position.copy(trainGroup.position);
+                camera.position.x += 6; 
+                camera.position.y = 2.5;
+            } else {
+                const distToTrain = camera.position.distanceTo(trainGroup.position);
+                if (distToTrain < 30) {
+                    isDriving = true;
+                }
+            }
+            break;
     }
 };
 const onKeyUp = (e) => {
@@ -367,10 +445,12 @@ window.addEventListener('touchstart', (e) => {
         if (touch.clientX < window.innerWidth / 2 && touchLeftId === null) {
             touchLeftId = touch.identifier;
             leftStartPos = { x: touch.clientX, y: touch.clientY };
-            joystickBase.style.display = 'block';
-            joystickBase.style.left = leftStartPos.x + 'px';
-            joystickBase.style.top = leftStartPos.y + 'px';
-            joystickStick.style.transform = 'translate(0px, 0px)';
+            if (joystickBase) {
+                joystickBase.style.display = 'block';
+                joystickBase.style.left = leftStartPos.x + 'px';
+                joystickBase.style.top = leftStartPos.y + 'px';
+                joystickStick.style.transform = 'translate(0px, 0px)';
+            }
         } else if (touch.clientX >= window.innerWidth / 2 && touchRightId === null) {
             touchRightId = touch.identifier;
             rightLastPos = { x: touch.clientX, y: touch.clientY };
@@ -393,7 +473,7 @@ window.addEventListener('touchmove', (e) => {
                 moveX = (distX / distance) * maxDist;
                 moveY = (distY / distance) * maxDist;
             }
-            joystickStick.style.transform = `translate(${moveX}px, ${moveY}px)`;
+            if (joystickStick) joystickStick.style.transform = `translate(${moveX}px, ${moveY}px)`;
             
             moveInput.right = moveX > 0 ? moveX / maxDist : 0;
             moveInput.left = moveX < 0 ? -moveX / maxDist : 0;
@@ -416,14 +496,13 @@ window.addEventListener('touchend', (e) => {
         const touch = e.changedTouches[i];
         if (touch.identifier === touchLeftId) {
             touchLeftId = null;
-            joystickBase.style.display = 'none';
+            if (joystickBase) joystickBase.style.display = 'none';
             moveInput.forward = 0; moveInput.backward = 0; moveInput.left = 0; moveInput.right = 0;
         }
         if (touch.identifier === touchRightId) touchRightId = null;
     }
 });
 
-// マウス操作
 window.addEventListener('mousedown', (e) => {
     isMouseDown = true;
     mouseLastPos = { x: e.clientX, y: e.clientY };
@@ -444,20 +523,19 @@ window.addEventListener('mouseup', () => isMouseDown = false);
 const clock = new THREE.Clock();
 const speed = 25.0; 
 
-// 衝突判定ロジック
 function checkCollision(nextX, nextZ) {
     for (let i = 0; i < colliders.length; i++) {
         const c = colliders[i];
         if (c.type === 'box') {
             if (nextX >= c.x - c.hw && nextX <= c.x + c.hw &&
                 nextZ >= c.z - c.hd && nextZ <= c.z + c.hd) {
-                return true; // 衝突
+                return true; 
             }
         } else if (c.type === 'circle') {
             const dx = nextX - c.x;
             const dz = nextZ - c.z;
             if (dx*dx + dz*dz < c.r * c.r) {
-                return true; // 衝突
+                return true; 
             }
         }
     }
@@ -468,28 +546,63 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
 
-    camera.quaternion.setFromEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
+    if (isDriving) {
+        if (moveInput.forward > 0) trainSpeed += 15.0 * delta;
+        else if (moveInput.backward > 0) trainSpeed -= 15.0 * delta;
+        else trainSpeed *= 0.98; 
 
-    const zMove = moveInput.backward - moveInput.forward;
-    const xMove = moveInput.right - moveInput.left;
-
-    moveVector.set(xMove, 0, zMove);
-    moveVector.normalize();
-    moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
-
-    // 次の移動先候補を計算
-    const nextX = camera.position.x + moveVector.x * speed * delta;
-    const nextZ = camera.position.z + moveVector.z * speed * delta;
-
-    // X方向とZ方向それぞれ独立して衝突判定を行うことで、壁ずり移動を可能にする
-    if (!checkCollision(nextX, camera.position.z)) {
-        camera.position.x = nextX;
-    }
-    if (!checkCollision(camera.position.x, nextZ)) {
-        camera.position.z = nextZ;
+        trainSpeed = Math.max(-15.0, Math.min(45.0, trainSpeed));
+    } else {
+        if (trainSpeed < 25.0) trainSpeed += 5.0 * delta;
     }
 
-    camera.position.y = 2.5; 
+    trainProgress += (trainSpeed / 4.0) * delta; 
+    const totalPoints = trackPoints.length;
+
+    let currentIdx = Math.floor(trainProgress) % totalPoints;
+    if (currentIdx < 0) currentIdx += totalPoints;
+
+    const leadPos = trackPoints[currentIdx];
+    const nextPos = trackPoints[(currentIdx + 1) % totalPoints];
+    
+    leadCar.position.copy(leadPos);
+    leadCar.lookAt(nextPos.x, leadCar.position.y, nextPos.z);
+
+    let secondIdx = (currentIdx - 4) % totalPoints; 
+    if (secondIdx < 0) secondIdx += totalPoints;
+    const secondPos = trackPoints[secondIdx];
+    const secondNextPos = trackPoints[(secondIdx + 1) % totalPoints];
+    secondCar.position.copy(secondPos);
+    secondCar.lookAt(secondNextPos.x, secondCar.position.y, secondNextPos.z);
+
+    trainGroup.position.copy(leadPos);
+
+    if (isDriving) {
+        camera.position.copy(leadPos);
+        camera.position.y += 2.4; 
+        camera.quaternion.setFromEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
+        camera.lookAt(nextPos.x, camera.position.y, nextPos.z);
+    } else {
+        camera.quaternion.setFromEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
+
+        const zMove = moveInput.backward - moveInput.forward;
+        const xMove = moveInput.right - moveInput.left;
+
+        moveVector.set(xMove, 0, zMove);
+        moveVector.normalize();
+        moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
+
+        const nextX = camera.position.x + moveVector.x * speed * delta;
+        const nextZ = camera.position.z + moveVector.z * speed * delta;
+
+        if (!checkCollision(nextX, camera.position.z)) {
+            camera.position.x = nextX;
+        }
+        if (!checkCollision(camera.position.x, nextZ)) {
+            camera.position.z = nextZ;
+        }
+        camera.position.y = 2.5; 
+    }
 
     renderer.render(scene, camera);
 }
